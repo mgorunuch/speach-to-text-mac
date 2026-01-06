@@ -292,6 +292,23 @@ class WhisperRecognizer {
         transcribeWithWhisper()
     }
 
+    func stopRecordingWithoutTranscription() {
+        guard isRecording else { return }
+
+        print("⏹️ Stopping recording (no transcription)")
+
+        // Stop audio engine
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+
+        audioEngine.inputNode.removeTap(onBus: 0)
+        isRecording = false
+
+        // Close audio file
+        audioFile = nil
+    }
+
     private func transcribeWithWhisper() {
         print("🔄 Transcribing with Whisper...")
 

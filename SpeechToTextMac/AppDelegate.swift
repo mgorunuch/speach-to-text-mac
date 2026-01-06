@@ -1,11 +1,12 @@
 import Cocoa
 import SwiftUI
+import AVFoundation
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var popover: NSPopover?
     var hotkeyManager: HotkeyManager?
-    var whisperRecognizer: WhisperRecognizer?
+    var recognizerManager: RecognizerManager?
     var isRecording = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -16,16 +17,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
 
         // Initialize components
-        whisperRecognizer = WhisperRecognizer()
+        recognizerManager = RecognizerManager()
         hotkeyManager = HotkeyManager()
 
         // Set up global hotkey (F13)
         hotkeyManager?.registerHotkey { [weak self] in
             self?.toggleRecording()
         }
-
-        // Request permissions
-        requestPermissions()
     }
 
     func setupMenuBar() {
@@ -44,9 +42,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         statusItem?.menu = menu
 
-        // Show setup window on first launch
-        if !UserDefaults.standard.bool(forKey: "hasCompletedSetup") {
-            openSettings()
+        // Show setup window if permissions are not granted or on first launch
+        if !arePermissionsGranted() || !UserDefaults.standard.bool(forKey: "hasCompletedSetup") {
+            // Delay to ensure UI is ready
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.openSettings()
+            }
         }
     }
 
@@ -69,9 +70,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func startRecordingSession() {
         isRecording = true
         updateMenuBarIcon(recording: true)
-        print("🎙️ Recording started - Press F13 to stop")
 
-        whisperRecognizer?.startRecording { [weak self] result in
+        let provider = AppSettings.shared.provider
+        print("🎙️ Recording started - Press F13 to stop (Provider: \(provider.rawValue))")
+
+        recognizerManager?.startRecording { [weak self] result in
             guard let self = self else { return }
 
             switch result {
@@ -91,7 +94,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("⏹️ Recording stopped")
         isRecording = false
         updateMenuBarIcon(recording: false)
-        whisperRecognizer?.stopRecording()
+        recognizerManager?.stopRecording()
     }
 
     func updateMenuBarIcon(recording: Bool) {
@@ -110,8 +113,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let hostingController = NSHostingController(rootView: setupView)
 
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Setup"
-        window.styleMask = [.titled, .closable]
+        window.title = ""
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.hasShadow = true
         window.center()
         window.makeKeyAndOrderFront(nil)
         window.level = .floating
@@ -124,9 +133,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.terminate(nil)
     }
 
+    func arePermissionsGranted() -> Bool {
+        // Check microphone permission
+        let microphoneGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+
+        // Check accessibility permission
+        let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
+        let accessibilityGranted = AXIsProcessTrustedWithOptions(options)
+
+        return microphoneGranted && accessibilityGranted
+    }
+
     func requestPermissions() {
         // Request microphone permission
-        whisperRecognizer?.requestPermission()
+        recognizerManager?.requestPermission()
 
         // Show accessibility permission dialog
         let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]

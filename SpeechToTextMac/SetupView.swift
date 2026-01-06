@@ -6,172 +6,244 @@ struct SetupView: View {
     @StateObject private var viewModel = SetupViewModel()
 
     var body: some View {
-        VStack(spacing: 20) {
-            // Header
-            VStack(spacing: 8) {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 48))
-                    .foregroundColor(.blue)
+        ZStack {
+            // Background
+            Color(red: 0.2, green: 0.2, blue: 0.2)
+                .opacity(0.95)
+                .ignoresSafeArea()
 
-                Text("SpeechToTextMac Setup")
-                    .font(.title)
-                    .bold()
+            VStack(spacing: 0) {
+                // Header
+                HStack(spacing: 12) {
+                    Image(systemName: "waveform.circle.fill")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.tint)
+                        .symbolRenderingMode(.hierarchical)
 
-                Text("Press F13 to record, F13 to stop")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.top, 20)
-
-            Divider()
-
-            // Permissions Status
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Permissions")
-                    .font(.headline)
-
-                PermissionRow(
-                    title: "Microphone",
-                    icon: "mic.fill",
-                    status: viewModel.microphonePermission,
-                    action: viewModel.requestMicrophonePermission
-                )
-
-                PermissionRow(
-                    title: "Accessibility",
-                    icon: "hand.raised.fill",
-                    status: viewModel.accessibilityPermission,
-                    action: viewModel.openAccessibilityPreferences
-                )
-            }
-            .padding()
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(10)
-
-            // Audio Device Selection
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Microphone")
-                    .font(.headline)
-
-                Picker("Select Device", selection: Binding(
-                    get: { viewModel.selectedDeviceID ?? 0 },
-                    set: { viewModel.selectedDeviceID = $0 }
-                )) {
-                    ForEach(viewModel.audioDevices, id: \.id) { device in
-                        HStack {
-                            Text(device.name)
-                            if device.isDefault {
-                                Text("(Default)")
-                                    .foregroundColor(.secondary)
-                                    .font(.caption)
-                            }
-                        }
-                        .tag(device.id)
-                    }
+                    Text("Voice to Text")
+                        .font(.system(size: 24, weight: .bold))
                 }
-                .pickerStyle(.menu)
-                .onChange(of: viewModel.selectedDeviceID) { newValue in
-                    if let deviceID = newValue {
-                        viewModel.savePreferredDevice(deviceID)
-                    }
-                }
+                .padding(.top, 24)
+                .padding(.bottom, 16)
 
-                if let deviceName = viewModel.selectedDeviceName {
-                    Text("✓ Using: \(deviceName)")
-                        .font(.caption)
-                        .foregroundColor(.green)
-                }
-            }
-            .padding()
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(10)
-
-            // Status
+            // Status Banner
             if viewModel.isAllSetUp {
-                HStack {
+                HStack(spacing: 12) {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                    Text("All set! Close this window and press F13 to start.")
-                        .font(.subheadline)
+                        .foregroundStyle(.green)
+                        .font(.title2)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Ready to Go!")
+                            .font(.headline)
+                        Text("Press F13 to start recording")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
                 }
                 .padding()
                 .background(Color.green.opacity(0.1))
-                .cornerRadius(8)
             } else {
-                HStack {
+                HStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                    Text("Complete the steps above to get started")
-                        .font(.subheadline)
+                        .foregroundStyle(.orange)
+                        .font(.title2)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Setup Required")
+                            .font(.headline)
+                        Text("Enable permissions to continue")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
                 }
                 .padding()
                 .background(Color.orange.opacity(0.1))
-                .cornerRadius(8)
             }
 
-            Spacer()
+            Divider()
 
-            // Footer
-            HStack {
-                Button("Refresh Status") {
-                    viewModel.refresh()
+            // Main Form
+            Form {
+                // Permissions Section
+                Section {
+                    NativePermissionRow(
+                        title: "Microphone",
+                        icon: "mic.fill",
+                        iconColor: .pink,
+                        status: viewModel.microphonePermission,
+                        action: viewModel.requestMicrophonePermission
+                    )
+
+                    NativePermissionRow(
+                        title: "Accessibility",
+                        icon: "hand.raised.fill",
+                        iconColor: .blue,
+                        status: viewModel.accessibilityPermission,
+                        action: viewModel.openAccessibilityPreferences
+                    )
+                } header: {
+                    Label("Permissions", systemImage: "lock.shield.fill")
                 }
 
-                Spacer()
+                // Audio Input Section
+                Section {
+                    Picker("Audio Device", selection: Binding(
+                        get: { viewModel.selectedDeviceID ?? 0 },
+                        set: { viewModel.selectedDeviceID = $0 }
+                    )) {
+                        ForEach(viewModel.audioDevices, id: \.id) { device in
+                            Text(device.name + (device.isDefault ? " (Default)" : ""))
+                                .tag(device.id)
+                        }
+                    }
+                    .onChange(of: viewModel.selectedDeviceID) { newValue in
+                        if let deviceID = newValue {
+                            viewModel.savePreferredDevice(deviceID)
+                        }
+                    }
 
-                Button("Close") {
-                    NSApplication.shared.keyWindow?.close()
+                    if let deviceName = viewModel.selectedDeviceName {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                                .font(.caption)
+                            Text("Using: \(deviceName)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Label("Audio Input", systemImage: "speaker.wave.3.fill")
                 }
-                .keyboardShortcut(.defaultAction)
+
+                // Speech Provider Section
+                Section {
+                    Picker("Provider", selection: $viewModel.selectedProvider) {
+                        ForEach(SpeechProvider.allCases, id: \.self) { provider in
+                            Text(provider.rawValue).tag(provider)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: viewModel.selectedProvider) { _ in
+                        viewModel.saveSettings()
+                    }
+
+                    // OpenAI API Key
+                    if viewModel.selectedProvider == .openai {
+                        SecureField("OpenAI API Key", text: $viewModel.openAIKey, prompt: Text("sk-..."))
+                            .onChange(of: viewModel.openAIKey) { _ in
+                                viewModel.saveSettings()
+                            }
+
+                        Link("Get API Key", destination: URL(string: "https://platform.openai.com/api-keys")!)
+                            .font(.caption)
+                    }
+
+                    // Groq API Key
+                    if viewModel.selectedProvider == .groq {
+                        SecureField("Groq API Key", text: $viewModel.groqKey, prompt: Text("gsk_..."))
+                            .onChange(of: viewModel.groqKey) { _ in
+                                viewModel.saveSettings()
+                            }
+
+                        Link("Get API Key", destination: URL(string: "https://console.groq.com/keys")!)
+                            .font(.caption)
+                    }
+
+                    // Local Whisper info
+                    if viewModel.selectedProvider == .local {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.shield.fill")
+                                .foregroundStyle(.green)
+                                .font(.caption)
+                            Text("Processes audio locally on your device")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Label("Speech Provider", systemImage: "cpu.fill")
+                }
             }
-            .padding(.bottom, 16)
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+
+            Divider()
+
+                // Footer Buttons
+                HStack {
+                    Button("Refresh") {
+                        viewModel.refresh()
+                    }
+
+                    Spacer()
+
+                    Button("Done") {
+                        NSApplication.shared.keyWindow?.close()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
+            }
         }
-        .padding()
-        .frame(width: 450, height: 550)
+        .frame(width: 520, height: 650)
         .onAppear {
             viewModel.refresh()
         }
     }
 }
 
-struct PermissionRow: View {
+struct NativePermissionRow: View {
     let title: String
     let icon: String
+    let iconColor: Color
     let status: PermissionStatus
     let action: () -> Void
 
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             Image(systemName: icon)
-                .foregroundColor(.blue)
+                .foregroundStyle(iconColor)
+                .font(.title3)
                 .frame(width: 24)
 
-            Text(title)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body)
 
-            switch status {
-            case .granted:
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                    Text("Granted")
-                        .foregroundColor(.green)
+                switch status {
+                case .granted:
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption)
+                        Text("Enabled")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.green)
+
+                case .denied:
+                    Text("Not enabled")
                         .font(.caption)
-                }
+                        .foregroundStyle(.orange)
 
-            case .denied:
-                Button("Enable") {
-                    action()
+                case .notDetermined:
+                    Text("Not requested")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+            }
 
-            case .notDetermined:
-                Button("Request") {
+            Spacer()
+
+            if status != .granted {
+                Button(status == .notDetermined ? "Request" : "Enable") {
                     action()
                 }
                 .buttonStyle(.bordered)
-                .controlSize(.small)
             }
         }
     }
@@ -195,9 +267,14 @@ class SetupViewModel: ObservableObject {
     @Published var accessibilityPermission: PermissionStatus = .notDetermined
     @Published var audioDevices: [AudioDevice] = []
     @Published var selectedDeviceID: UInt32?
+    @Published var selectedProvider: SpeechProvider = AppSettings.shared.provider
+    @Published var openAIKey: String = AppSettings.shared.openAIKey
+    @Published var groqKey: String = AppSettings.shared.groqKey
 
     var isAllSetUp: Bool {
-        microphonePermission == .granted && accessibilityPermission == .granted && selectedDeviceID != nil
+        let permissionsGranted = microphonePermission == .granted && accessibilityPermission == .granted && selectedDeviceID != nil
+        let providerConfigured = AppSettings.shared.isProviderConfigured(selectedProvider)
+        return permissionsGranted && providerConfigured
     }
 
     var selectedDeviceName: String? {
@@ -320,6 +397,12 @@ class SetupViewModel: ObservableObject {
     func savePreferredDevice(_ deviceID: UInt32) {
         UserDefaults.standard.set(deviceID, forKey: "preferredDeviceID")
         print("💾 Saved preferred device: \(deviceID)")
+    }
+
+    func saveSettings() {
+        AppSettings.shared.provider = selectedProvider
+        AppSettings.shared.openAIKey = openAIKey
+        AppSettings.shared.groqKey = groqKey
     }
 }
 
