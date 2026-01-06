@@ -1,0 +1,23 @@
+name: SpeechToTextMac
+
+options:
+  bundleIdPrefix: com.yourname
+  deploymentTarget:
+    macOS: "13.0"
+
+targets:
+  SpeechToTextMac:
+    type: application
+    platform: macOS
+    sources:
+      - SpeechToTextMac
+    info:
+      path: SpeechToTextMac/Info.plist
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourname.SpeechToTextMac
+      INFOPLIST_FILE: SpeechToTextMac/Info.plist
+      MACOSX_DEPLOYMENT_TARGET: "13.0"
+      SWIFT_VERSION: "5.9"
+      DEVELOPMENT_TEAM: ""
+    scheme:
+      testTargets: []
