@@ -80,6 +80,14 @@ class RecognizerManager {
         }
     }
 
+    func cancelRecording() {
+        guard isRecording else { return }
+        isRecording = false
+
+        whisperRecognizer.cancelRecording()
+        completionHandler = nil
+    }
+
     private func stopAndTranscribeWithAPI(provider: SpeechProvider) {
         // Stop the audio engine and get the recorded file
         let tempAudioPath = NSTemporaryDirectory() + "recording.wav"
@@ -111,10 +119,18 @@ class RecognizerManager {
                 return
             }
 
+            // Process prompt template with variable replacement
+            let template = AppSettings.shared.promptTemplate
+            let customPrompt = AppSettings.shared.whisperPrompt
+            let outputLanguage = AppSettings.shared.outputLanguage
+            let processedPrompt = PromptProcessor.process(template: template, customPrompt: customPrompt, language: outputLanguage)
+            let promptToUse = processedPrompt.isEmpty ? nil : processedPrompt
+            let languageCode = PromptProcessor.resolveLanguageCode(outputLanguage)
+
             switch provider {
             case .openai:
                 let client = OpenAIClient(apiKey: apiKey)
-                client.transcribe(audioFileURL: audioURL) { [weak self] result in
+                client.transcribe(audioFileURL: audioURL, prompt: promptToUse, language: languageCode) { [weak self] result in
                     DispatchQueue.main.async {
                         self?.completionHandler?(result)
                     }
@@ -122,7 +138,7 @@ class RecognizerManager {
 
             case .groq:
                 let client = GroqClient(apiKey: apiKey)
-                client.transcribe(audioFileURL: audioURL) { [weak self] result in
+                client.transcribe(audioFileURL: audioURL, prompt: promptToUse, language: languageCode) { [weak self] result in
                     DispatchQueue.main.async {
                         self?.completionHandler?(result)
                     }

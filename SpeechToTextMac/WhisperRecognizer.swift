@@ -309,8 +309,31 @@ class WhisperRecognizer {
         audioFile = nil
     }
 
-    private func transcribeWithWhisper() {
+    func cancelRecording() {
+        guard isRecording else { return }
+
+        print("🚫 Recording cancelled")
+
+        // Stop audio engine
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+
+        audioEngine.inputNode.removeTap(onBus: 0)
+        isRecording = false
+
+        // Close and cleanup audio file
+        audioFile = nil
+
+        // Clear completion handler to prevent any callback
+        completionHandler = nil
+    }
+
+    private func transcribeWithWhisper(language: String? = nil) {
         print("🔄 Transcribing with Whisper...")
+
+        let languageCode = language ?? PromptProcessor.resolveLanguageCode(AppSettings.shared.outputLanguage) ?? "en"
+        print("🌐 Using language: \(languageCode)")
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: whisperPath)
@@ -318,7 +341,7 @@ class WhisperRecognizer {
             "-m", modelPath,
             "-f", tempAudioPath,
             "-nt",  // No timestamps
-            "-l", "en",  // English
+            "-l", languageCode,
             "-np"   // No print progress
         ]
 

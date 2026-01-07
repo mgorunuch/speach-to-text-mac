@@ -6,10 +6,13 @@ class HotkeyManager {
     private var hotKeyRef: EventHotKeyRef?
     private var callback: (() -> Void)?
 
-    func registerHotkey(callback: @escaping () -> Void) {
+    func registerHotkey(config: HotkeyConfiguration, callback: @escaping () -> Void) {
         self.callback = callback
 
-        // Register F13 hotkey
+        // Unregister existing hotkey if any
+        unregisterHotkey()
+
+        // Register hotkey
         let hotkeyID = EventHotKeyID(signature: UTGetOSTypeFromString("WSPR" as CFString), id: 1)
         var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
 
@@ -20,17 +23,19 @@ class HotkeyManager {
             return noErr
         }, 1, &eventType, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
 
-        // Register hotkey: F13
-        let keyCode = UInt32(kVK_F13)
-        let modifiers = UInt32(0) // No modifiers
+        // Register hotkey with custom configuration
+        RegisterEventHotKey(config.keyCode, config.modifiers, hotkeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
+    }
 
-        RegisterEventHotKey(keyCode, modifiers, hotkeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
+    func unregisterHotkey() {
+        if let hotKeyRef = hotKeyRef {
+            UnregisterEventHotKey(hotKeyRef)
+            self.hotKeyRef = nil
+        }
     }
 
     deinit {
-        if let hotKeyRef = hotKeyRef {
-            UnregisterEventHotKey(hotKeyRef)
-        }
+        unregisterHotkey()
         if let eventHandler = eventHandler {
             RemoveEventHandler(eventHandler)
         }

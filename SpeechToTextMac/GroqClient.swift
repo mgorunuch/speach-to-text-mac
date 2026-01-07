@@ -8,7 +8,7 @@ class GroqClient {
         self.apiKey = apiKey
     }
 
-    func transcribe(audioFileURL: URL, completion: @escaping (Result<String, Error>) -> Void) {
+    func transcribe(audioFileURL: URL, prompt: String? = nil, language: String? = nil, completion: @escaping (Result<String, Error>) -> Void) {
         let endpoint = "\(baseURL)/audio/transcriptions"
 
         guard let url = URL(string: endpoint) else {
@@ -49,6 +49,20 @@ class GroqClient {
         body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
         body.append(audioData)
         body.append("\r\n".data(using: .utf8)!)
+
+        // Add prompt parameter if provided
+        if let prompt = prompt, !prompt.isEmpty {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"prompt\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(prompt)\r\n".data(using: .utf8)!)
+        }
+
+        // Add language parameter if provided
+        if let language = language, !language.isEmpty {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"language\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(language)\r\n".data(using: .utf8)!)
+        }
 
         // Close boundary
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)

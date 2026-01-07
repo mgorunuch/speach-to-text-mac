@@ -4,6 +4,7 @@ import ApplicationServices
 
 struct SetupView: View {
     @StateObject private var viewModel = SetupViewModel()
+    @State private var selectedTab = 0
 
     var body: some View {
         ZStack {
@@ -15,19 +16,30 @@ struct SetupView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack(spacing: 12) {
-                    Image(systemName: "waveform.circle.fill")
+                    Image(systemName: selectedTab == 0 ? "waveform.circle.fill" : "clock.arrow.circlepath")
                         .font(.system(size: 32))
                         .foregroundStyle(.tint)
                         .symbolRenderingMode(.hierarchical)
 
-                    Text("Voice to Text")
+                    Text(selectedTab == 0 ? "Voice to Text" : "Transcript History")
                         .font(.system(size: 24, weight: .bold))
                 }
                 .padding(.top, 24)
                 .padding(.bottom, 16)
 
-            // Status Banner
-            if viewModel.isAllSetUp {
+                // Tab Picker
+                Picker("", selection: $selectedTab) {
+                    Text("Setup").tag(0)
+                    Text("History").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+
+                // Setup Tab Content
+                if selectedTab == 0 {
+                    // Status Banner
+                    if viewModel.isAllSetUp {
                 HStack(spacing: 12) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
@@ -36,7 +48,7 @@ struct SetupView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Ready to Go!")
                             .font(.headline)
-                        Text("Press F13 to start recording")
+                        Text("Press \(viewModel.hotkey.displayString) to start recording")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -82,7 +94,8 @@ struct SetupView: View {
                         icon: "hand.raised.fill",
                         iconColor: .blue,
                         status: viewModel.accessibilityPermission,
-                        action: viewModel.openAccessibilityPreferences
+                        action: viewModel.openAccessibilityPreferences,
+                        refreshAction: viewModel.checkAccessibilityPermission
                     )
                 } header: {
                     Label("Permissions", systemImage: "lock.shield.fill")
@@ -119,6 +132,30 @@ struct SetupView: View {
                     Label("Audio Input", systemImage: "speaker.wave.3.fill")
                 }
 
+                // Hotkey Configuration Section
+                Section {
+                    HotkeyRecorderView(
+                        hotkey: $viewModel.hotkey,
+                        onHotkeyChanged: {
+                            Task { @MainActor in
+                                viewModel.saveSettings()
+                                NotificationCenter.default.post(name: NSNotification.Name("HotkeyChanged"), object: nil)
+                            }
+                        }
+                    )
+
+                    HStack(spacing: 8) {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundStyle(.blue)
+                            .font(.caption)
+                        Text("Click the button and press your desired key combination")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Label("Hotkey", systemImage: "command")
+                }
+
                 // Speech Provider Section
                 Section {
                     Picker("Provider", selection: $viewModel.selectedProvider) {
@@ -128,14 +165,18 @@ struct SetupView: View {
                     }
                     .pickerStyle(.segmented)
                     .onChange(of: viewModel.selectedProvider) { _ in
-                        viewModel.saveSettings()
+                        Task { @MainActor in
+                            viewModel.saveSettings()
+                        }
                     }
 
                     // OpenAI API Key
                     if viewModel.selectedProvider == .openai {
                         SecureField("OpenAI API Key", text: $viewModel.openAIKey, prompt: Text("sk-..."))
                             .onChange(of: viewModel.openAIKey) { _ in
-                                viewModel.saveSettings()
+                                Task { @MainActor in
+                                    viewModel.saveSettings()
+                                }
                             }
 
                         Link("Get API Key", destination: URL(string: "https://platform.openai.com/api-keys")!)
@@ -146,11 +187,86 @@ struct SetupView: View {
                     if viewModel.selectedProvider == .groq {
                         SecureField("Groq API Key", text: $viewModel.groqKey, prompt: Text("gsk_..."))
                             .onChange(of: viewModel.groqKey) { _ in
-                                viewModel.saveSettings()
+                                Task { @MainActor in
+                                    viewModel.saveSettings()
+                                }
                             }
 
                         Link("Get API Key", destination: URL(string: "https://console.groq.com/keys")!)
                             .font(.caption)
+                    }
+
+                    // Output Language (for OpenAI and Groq)
+                    if viewModel.selectedProvider == .openai || viewModel.selectedProvider == .groq {
+                        Picker("Output Language", selection: $viewModel.outputLanguage) {
+                            ForEach(OutputLanguage.allCases, id: \.self) { language in
+                                Text(language.displayName).tag(language)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .onChange(of: viewModel.outputLanguage) { _ in
+                            Task { @MainActor in
+                                viewModel.saveSettings()
+                            }
+                        }
+                    }
+
+                    // Prompt Configuration (for OpenAI and Groq)
+                    if viewModel.selectedProvider == .openai || viewModel.selectedProvider == .groq {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Prompt Template")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+
+                            Picker("Template", selection: $viewModel.promptTemplate) {
+                                ForEach(PromptTemplate.allCases, id: \.self) { template in
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(template.displayName)
+                                            .font(.body)
+                                        Text(template.description)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .tag(template)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .onChange(of: viewModel.promptTemplate) { _ in
+                                Task { @MainActor in
+                                    viewModel.saveSettings()
+                                }
+                            }
+
+                            // Show preview of selected template
+                            if viewModel.promptTemplate != .none && viewModel.promptTemplate != .custom {
+                                Text(PromptProcessor.process(template: viewModel.promptTemplate, language: viewModel.outputLanguage))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .padding(8)
+                                    .background(Color.secondary.opacity(0.1))
+                                    .cornerRadius(6)
+                            }
+
+                            // Custom prompt field (only for Custom template)
+                            if viewModel.promptTemplate == .custom {
+                                TextField("Custom Prompt", text: $viewModel.whisperPrompt, prompt: Text("e.g., Technical discussion about Kubernetes..."), axis: .vertical)
+                                    .lineLimit(3...5)
+                                    .onChange(of: viewModel.whisperPrompt) { _ in
+                                        Task { @MainActor in
+                                            viewModel.saveSettings()
+                                        }
+                                    }
+                            }
+
+                            HStack(spacing: 8) {
+                                Image(systemName: "info.circle.fill")
+                                    .foregroundStyle(.blue)
+                                    .font(.caption)
+                                Text("Use %ActiveApp for app name, %Language for output language")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
 
                     // Local Whisper info
@@ -173,26 +289,32 @@ struct SetupView: View {
 
             Divider()
 
-                // Footer Buttons
-                HStack {
-                    Button("Refresh") {
-                        viewModel.refresh()
-                    }
+                    // Footer Buttons
+                    HStack {
+                        Button("Refresh") {
+                            viewModel.refresh()
+                        }
 
-                    Spacer()
+                        Spacer()
 
-                    Button("Done") {
-                        NSApplication.shared.keyWindow?.close()
+                        Button("Done") {
+                            NSApplication.shared.keyWindow?.close()
+                        }
+                        .keyboardShortcut(.defaultAction)
+                        .buttonStyle(.borderedProminent)
                     }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
+                    .padding()
+                } else {
+                    // History Tab Content
+                    HistoryTabContent()
                 }
-                .padding()
             }
         }
-        .frame(width: 520, height: 650)
+        .frame(width: 580, height: 650)
         .onAppear {
-            viewModel.refresh()
+            if selectedTab == 0 {
+                viewModel.refresh()
+            }
         }
     }
 }
@@ -203,6 +325,7 @@ struct NativePermissionRow: View {
     let iconColor: Color
     let status: PermissionStatus
     let action: () -> Void
+    var refreshAction: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -239,11 +362,21 @@ struct NativePermissionRow: View {
 
             Spacer()
 
-            if status != .granted {
-                Button(status == .notDetermined ? "Request" : "Enable") {
-                    action()
+            HStack(spacing: 8) {
+                if status != .granted {
+                    Button(status == .notDetermined ? "Request" : "Enable") {
+                        action()
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
+
+                if let refreshAction = refreshAction {
+                    Button(action: refreshAction) {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Refresh permission status")
+                }
             }
         }
     }
@@ -270,6 +403,10 @@ class SetupViewModel: ObservableObject {
     @Published var selectedProvider: SpeechProvider = AppSettings.shared.provider
     @Published var openAIKey: String = AppSettings.shared.openAIKey
     @Published var groqKey: String = AppSettings.shared.groqKey
+    @Published var whisperPrompt: String = AppSettings.shared.whisperPrompt
+    @Published var promptTemplate: PromptTemplate = AppSettings.shared.promptTemplate
+    @Published var hotkey: HotkeyConfiguration = AppSettings.shared.hotkey
+    @Published var outputLanguage: OutputLanguage = AppSettings.shared.outputLanguage
 
     var isAllSetUp: Bool {
         let permissionsGranted = microphonePermission == .granted && accessibilityPermission == .granted && selectedDeviceID != nil
@@ -403,6 +540,10 @@ class SetupViewModel: ObservableObject {
         AppSettings.shared.provider = selectedProvider
         AppSettings.shared.openAIKey = openAIKey
         AppSettings.shared.groqKey = groqKey
+        AppSettings.shared.whisperPrompt = whisperPrompt
+        AppSettings.shared.promptTemplate = promptTemplate
+        AppSettings.shared.hotkey = hotkey
+        AppSettings.shared.outputLanguage = outputLanguage
     }
 }
 
